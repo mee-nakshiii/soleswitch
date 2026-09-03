@@ -39,10 +39,10 @@ export default function ControlPanel({ telemetry }) {
   };
 
   const targetGestures = [
-    { key: GESTURES.PREVIOUS, direction: 'LEFT', action: 'Previous Track', icon: '⏮' },
-    { key: GESTURES.NEXT, direction: 'RIGHT', action: 'Next Track', icon: '⏭' },
-    { key: GESTURES.PLAY, direction: 'FORWARD', action: 'Play / Resume', icon: '▶' },
-    { key: GESTURES.PAUSE, direction: 'BACKWARD', action: 'Pause', icon: '⏸' },
+    { key: GESTURES.PREVIOUS, direction: 'LEFT', action: 'Previous Track (Hold 🔄)', icon: '⏮' },
+    { key: GESTURES.NEXT, direction: 'RIGHT', action: 'Next Track (Hold 🔄)', icon: '⏭' },
+    { key: GESTURES.PLAY, direction: 'FORWARD', action: 'Play / Resume (1x)', icon: '▶' },
+    { key: GESTURES.PAUSE, direction: 'BACKWARD', action: 'Pause (1x)', icon: '⏸' },
   ];
 
   const currentGesture = telemetry?.currentGesture || GESTURES.NONE;
@@ -50,6 +50,9 @@ export default function ControlPanel({ telemetry }) {
   const lastEvent = telemetry?.lastEvent;
   const cooldownActive = telemetry?.cooldownActive;
   const cooldownMs = telemetry?.cooldownRemainingMs || 0;
+  const isRepeatActive = telemetry?.isRepeatActive;
+  const repeatGesture = telemetry?.repeatGesture;
+  const timeUntilNextRepeatMs = telemetry?.timeUntilNextRepeatMs || 0;
   const delta = telemetry?.telemetry || { dx: 0, dy: 0, magnitude: 0 };
 
   return (
@@ -59,6 +62,9 @@ export default function ControlPanel({ telemetry }) {
         <div className="status-pills">
           <span className={`status-pill ${cooldownActive ? 'pending' : 'online'}`}>
             {cooldownActive ? `Cooldown (${cooldownMs}ms)` : 'Engine Ready'}
+          </span>
+          <span className={`status-pill ${isRepeatActive ? 'pending' : 'online'}`}>
+            Repeat: {isRepeatActive ? `${repeatGesture} (${timeUntilNextRepeatMs}ms)` : 'Inactive'}
           </span>
           <span className={`status-pill ${spotifyState.isConnected ? 'online' : 'offline'}`}>
             Spotify: {spotifyState.isConnected ? 'Connected' : 'Disconnected'}
@@ -98,7 +104,7 @@ export default function ControlPanel({ telemetry }) {
         <div className="telemetry-row">
           <span className="telemetry-label">Last Fired Event:</span>
           <span className="telemetry-value highlight">
-            {lastEvent ? `${lastEvent.type} (${Math.round(lastEvent.confidence * 100)}%)` : 'None'}
+            {lastEvent ? `${lastEvent.type} (${Math.round(lastEvent.confidence * 100)}%)${lastEvent.isRepeat ? ' 🔄 Repeat' : ''}` : 'None'}
           </span>
         </div>
 
@@ -122,7 +128,7 @@ export default function ControlPanel({ telemetry }) {
         <div className="config-hints">
           <small>
             <strong>Tune Thresholds in `gestureTypes.js`:</strong><br />
-            X Threshold: <code>{GESTURE_CONFIG.MOVEMENT_THRESHOLD_X}</code> | Y Threshold: <code>{GESTURE_CONFIG.MOVEMENT_THRESHOLD_Y}</code> | Cooldown: <code>{GESTURE_CONFIG.GESTURE_COOLDOWN_MS}ms</code>
+            X: <code>{GESTURE_CONFIG.MOVEMENT_THRESHOLD_X}</code> | Y: <code>{GESTURE_CONFIG.MOVEMENT_THRESHOLD_Y}</code> | Repeat Interval: <code>{GESTURE_CONFIG.DIRECTION_REPEAT_INTERVAL_MS}ms</code> | Cooldown: <code>{GESTURE_CONFIG.GESTURE_COOLDOWN_MS}ms</code>
           </small>
         </div>
       </div>

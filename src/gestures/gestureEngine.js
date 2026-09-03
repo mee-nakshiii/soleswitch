@@ -3,6 +3,7 @@ import { GESTURE_CONFIG, GESTURES } from './gestureTypes';
 /**
  * Stateful Gesture Engine for SoleSwitch.
  * Converts MediaPipe foot landmark coordinates into semantic gesture events.
+ * Supports hold-to-repeat for NEXT and PREVIOUS gestures while keeping PLAY and PAUSE single-fire.
  */
 export class GestureEngine {
   constructor(config = GESTURE_CONFIG) {
@@ -12,6 +13,8 @@ export class GestureEngine {
     this.lastFiredEvent = null;
     this.candidateGesture = GESTURES.NONE;
     this.candidateCount = 0;
+    this.activeRepeatGesture = null;
+    this.lastRepeatFiredTime = 0;
     this.listeners = [];
   }
 
@@ -36,6 +39,8 @@ export class GestureEngine {
       this.history = [];
       this.candidateGesture = GESTURES.NONE;
       this.candidateCount = 0;
+      this.activeRepeatGesture = null;
+      this.lastRepeatFiredTime = 0;
 
       return {
         currentGesture: GESTURES.NONE,
@@ -43,6 +48,9 @@ export class GestureEngine {
         lastEvent: this.lastFiredEvent,
         cooldownActive: isCooldownActive,
         cooldownRemainingMs,
+        isRepeatActive: false,
+        repeatGesture: null,
+        timeUntilNextRepeatMs: 0,
         telemetry: { dx: 0, dy: 0, magnitude: 0 },
       };
     }
@@ -63,12 +71,18 @@ export class GestureEngine {
     );
 
     if (validPoints.length === 0) {
+      this.activeRepeatGesture = null;
+      this.lastRepeatFiredTime = 0;
+
       return {
         currentGesture: GESTURES.NONE,
         confidence: 0,
         lastEvent: this.lastFiredEvent,
         cooldownActive: isCooldownActive,
         cooldownRemainingMs,
+        isRepeatActive: false,
+        repeatGesture: null,
+        timeUntilNextRepeatMs: 0,
         telemetry: { dx: 0, dy: 0, magnitude: 0 },
       };
     }
@@ -90,6 +104,9 @@ export class GestureEngine {
         lastEvent: this.lastFiredEvent,
         cooldownActive: isCooldownActive,
         cooldownRemainingMs,
+        isRepeatActive: false,
+        repeatGesture: null,
+        timeUntilNextRepeatMs: 0,
         telemetry: { dx: 0, dy: 0, magnitude: 0 },
       };
     }
@@ -108,9 +125,9 @@ export class GestureEngine {
     if (absDx > absDy) {
       // Invert horizontal interpretation to account for mirrored front-facing camera feed
       if (dx < -this.config.MOVEMENT_THRESHOLD_X) {
-        detectedCandidate = GESTURES.NEXT; // Physical RIGHT movement (dx decreases in mirrored view) -> NEXT
+        detectedCandidate = GESTURES.NEXT; // Physical RIGHT movement -> NEXT
       } else if (dx > this.config.MOVEMENT_THRESHOLD_X) {
-        detectedCandidate = GESTURES.PREVIOUS; // Physical LEFT movement (dx increases in mirrored view) -> PREVIOUS
+        detectedCandidate = GESTURES.PREVIOUS; // Physical LEFT movement -> PREVIOUS
       }
     } else {
       if (dy > this.config.MOVEMENT_THRESHOLD_Y) {
@@ -118,6 +135,12 @@ export class GestureEngine {
       } else if (dy < -this.config.MOVEMENT_THRESHOLD_Y) {
         detectedCandidate = GESTURES.PAUSE; // Moving backward away from camera (y decreases) -> PAUSE
       }
+    }
+
+    // Reset repeat state if candidate changes or returns to neutral
+    if (detectedCandidate !== GESTURES.NEXT && detectedCandidate !== GESTURES.PREVIOUS) {
+      this.activeRepeatGesture = null;
+      this.lastRepeatFiredTime = 0;
     }
 
     // Stability check: consecutive frames matching candidate
@@ -137,10 +160,10 @@ export class GestureEngine {
       confidence = Math.min(1.0, Math.max(0.4, 0.5 + (ratio - 1.0) * 0.3));
     }
 
-    // Trigger gesture event if stability, cooldown, and confidence requirements are met
     const isStable = this.candidateCount >= this.config.STABILITY_FRAMES;
     const isConfident = confidence >= this.config.MIN_CONFIDENCE;
 
+    // 1. Initial Trigger
     if (
       detectedCandidate !== GESTURES.NONE &&
       isStable &&
@@ -151,17 +174,51 @@ export class GestureEngine {
         type: detectedCandidate,
         confidence: Number(confidence.toFixed(2)),
         timestamp: now,
+        isRepeat: false,
         details: { dx: Number(dx.toFixed(3)), dy: Number(dy.toFixed(3)) },
       };
 
       this.lastFiredTime = now;
       this.lastFiredEvent = gestureEvent;
-      this.history = []; // Reset history after trigger to avoid continuous multi-fires
+      this.history = []; // Reset history after trigger to avoid immediate false frames
       this.candidateCount = 0;
+
+      if (detectedCandidate === GESTURES.NEXT || detectedCandidate === GESTURES.PREVIOUS) {
+        this.activeRepeatGesture = detectedCandidate;
+        this.lastRepeatFiredTime = now;
+      } else {
+        this.activeRepeatGesture = null;
+        this.lastRepeatFiredTime = 0;
+      }
 
       // Notify listeners
       this.listeners.forEach((fn) => fn(gestureEvent));
     }
+    // 2. Hold-to-Repeat Trigger for NEXT and PREVIOUS
+    else if (
+      this.activeRepeatGesture &&
+      this.activeRepeatGesture === detectedCandidate &&
+      now - this.lastRepeatFiredTime >= this.config.DIRECTION_REPEAT_INTERVAL_MS
+    ) {
+      const gestureEvent = {
+        type: detectedCandidate,
+        confidence: Number(confidence.toFixed(2)),
+        timestamp: now,
+        isRepeat: true,
+        details: { dx: Number(dx.toFixed(3)), dy: Number(dy.toFixed(3)) },
+      };
+
+      this.lastRepeatFiredTime = now;
+      this.lastFiredEvent = gestureEvent;
+
+      // Notify listeners
+      this.listeners.forEach((fn) => fn(gestureEvent));
+    }
+
+    const isRepeatActive = !!this.activeRepeatGesture;
+    const timeUntilNextRepeatMs = isRepeatActive
+      ? Math.max(0, this.config.DIRECTION_REPEAT_INTERVAL_MS - (now - this.lastRepeatFiredTime))
+      : 0;
 
     return {
       currentGesture: this.candidateGesture,
@@ -169,6 +226,9 @@ export class GestureEngine {
       lastEvent: this.lastFiredEvent,
       cooldownActive: isCooldownActive,
       cooldownRemainingMs,
+      isRepeatActive,
+      repeatGesture: this.activeRepeatGesture,
+      timeUntilNextRepeatMs,
       telemetry: {
         dx: Number(dx.toFixed(3)),
         dy: Number(dy.toFixed(3)),

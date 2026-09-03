@@ -12,6 +12,9 @@ export const GESTURE_CONFIG = {
   // Cooldown duration in milliseconds after a gesture fires to prevent duplicates
   GESTURE_COOLDOWN_MS: 850,
 
+  // Repeat interval in milliseconds when holding RIGHT (NEXT) or LEFT (PREVIOUS)
+  DIRECTION_REPEAT_INTERVAL_MS: 1000,
+
   // Number of recent frames stored in rolling history
   HISTORY_LENGTH: 8,
 

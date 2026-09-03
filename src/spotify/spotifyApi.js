@@ -202,21 +202,97 @@ export class SpotifyApi {
     }
   }
 
-  // Playback Operations
+  /**
+   * Get available Spotify playback devices
+   */
+  async getDevices() {
+    const res = await this.request('/me/player/devices', 'GET');
+    return {
+      success: res.success,
+      status: res.status,
+      devices: res.data?.devices || [],
+    };
+  }
+
+  /**
+   * Transfer playback to target device ID
+   */
+  async transferPlayback(deviceId) {
+    return this.request('/me/player', 'PUT', {
+      device_ids: [deviceId],
+      play: true,
+    });
+  }
+
+  /**
+   * Helper wrapper for playback commands:
+   * Handles 404 NO_ACTIVE_DEVICE by discovering available devices and retrying once.
+   */
+  async executeWithDeviceRecovery(commandFn) {
+    const res = await commandFn();
+
+    // Check if error is NO_ACTIVE_DEVICE (404)
+    const isNoDeviceError =
+      res &&
+      !res.success &&
+      (res.status === 404 || (res.message && res.message.toLowerCase().includes('device')));
+
+    if (isNoDeviceError) {
+      const devicesRes = await this.getDevices();
+      const devices = devicesRes.devices || [];
+
+      if (devices.length === 0) {
+        return {
+          success: false,
+          status: 404,
+          message: 'Open Spotify on your phone or desktop to activate controls.',
+        };
+      }
+
+      // Preference order:
+      // 1. is_active === true
+      // 2. type === 'Computer'
+      // 3. First available device
+      const bestDevice =
+        devices.find((d) => d.is_active) ||
+        devices.find((d) => d.type === 'Computer') ||
+        devices[0];
+
+      if (bestDevice && bestDevice.id) {
+        const transferRes = await this.transferPlayback(bestDevice.id);
+        if (transferRes.success) {
+          // Wait brief delay for player state activation
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          // Retry original command once
+          return commandFn();
+        }
+      }
+
+      return {
+        success: false,
+        status: 404,
+        message: 'Open Spotify on your phone or desktop to activate controls.',
+      };
+    }
+
+    return res;
+  }
+
+  // Playback Operations (Wrapped with automatic device recovery)
   async play() {
-    return this.request('/me/player/play', 'PUT');
+    return this.executeWithDeviceRecovery(() => this.request('/me/player/play', 'PUT'));
   }
 
   async pause() {
-    return this.request('/me/player/pause', 'PUT');
+    return this.executeWithDeviceRecovery(() => this.request('/me/player/pause', 'PUT'));
   }
 
   async next() {
-    return this.request('/me/player/next', 'POST');
+    return this.executeWithDeviceRecovery(() => this.request('/me/player/next', 'POST'));
   }
 
   async previous() {
-    return this.request('/me/player/previous', 'POST');
+    return this.executeWithDeviceRecovery(() => this.request('/me/player/previous', 'POST'));
   }
 
   async getCurrentPlayback() {
