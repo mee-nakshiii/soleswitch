@@ -225,6 +225,18 @@ export class SpotifyApi {
   }
 
   /**
+   * Search Spotify catalogue (e.g. q="Michael Jackson", type="track")
+   */
+  async searchTracks(query, limit = 20) {
+    const params = new URLSearchParams({
+      q: query,
+      type: 'track',
+      limit: limit.toString(),
+    });
+    return this.request(`/search?${params.toString()}`, 'GET');
+  }
+
+  /**
    * Helper wrapper for playback commands:
    * Handles 404 NO_ACTIVE_DEVICE by discovering available devices and retrying once.
    */
@@ -281,6 +293,38 @@ export class SpotifyApi {
   // Playback Operations (Wrapped with automatic device recovery)
   async play() {
     return this.executeWithDeviceRecovery(() => this.request('/me/player/play', 'PUT'));
+  }
+
+  async playTrack(trackUri) {
+    return this.executeWithDeviceRecovery(() =>
+      this.request('/me/player/play', 'PUT', { uris: [trackUri] })
+    );
+  }
+
+  /**
+   * Enqueue a track into the user's active Spotify player queue
+   */
+  async enqueueTrack(trackUri) {
+    const params = new URLSearchParams({ uri: trackUri });
+    return this.executeWithDeviceRecovery(() =>
+      this.request(`/me/player/queue?${params.toString()}`, 'POST')
+    );
+  }
+
+  /**
+   * Queue-and-Skip Strategy: Inserts track into active queue and advances immediately,
+   * preserving user's underlying playlist/album context so NEXT and PREVIOUS continue working.
+   */
+  async enqueueAndPlayTrack(trackUri) {
+    const queueRes = await this.enqueueTrack(trackUri);
+
+    if (queueRes && queueRes.success) {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      return this.next();
+    }
+
+    // Fallback for idle/disconnected player context: play track directly
+    return this.playTrack(trackUri);
   }
 
   async pause() {

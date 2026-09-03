@@ -43,6 +43,9 @@ export default function ControlPanel({ telemetry }) {
     { key: GESTURES.NEXT, direction: 'RIGHT', action: 'Next Track (Hold 🔄)', icon: '⏭' },
     { key: GESTURES.PLAY, direction: 'FORWARD', action: 'Play / Resume (1x)', icon: '▶' },
     { key: GESTURES.PAUSE, direction: 'BACKWARD', action: 'Pause (1x)', icon: '⏸' },
+    { key: GESTURES.POSE_MJ, direction: 'L. LEG FWD', action: 'Michael Jackson Hit', icon: '🕺' },
+    { key: GESTURES.POSE_RICK, direction: 'R. LEG FWD', action: 'Rick Astley - Never Gonna Give You Up', icon: '🎤' },
+    { key: GESTURES.POSE_BIEBER, direction: 'WIDE STANCE', action: 'Justin Bieber - Baby', icon: '🎵' },
   ];
 
   const currentGesture = telemetry?.currentGesture || GESTURES.NONE;
@@ -54,6 +57,16 @@ export default function ControlPanel({ telemetry }) {
   const repeatGesture = telemetry?.repeatGesture;
   const timeUntilNextRepeatMs = telemetry?.timeUntilNextRepeatMs || 0;
   const delta = telemetry?.telemetry || { dx: 0, dy: 0, magnitude: 0 };
+  const poseDebug = telemetry?.poseDebug || {
+    leftFootY: 0,
+    rightFootY: 0,
+    diffY: 0,
+    stanceWidth: 0,
+    activeSpecialPose: GESTURES.NONE,
+    poseStabilityCount: 0,
+    specialPoseCooldownActive: false,
+    specialPoseCooldownRemainingMs: 0,
+  };
 
   return (
     <div className="card control-card">
@@ -108,6 +121,14 @@ export default function ControlPanel({ telemetry }) {
           </span>
         </div>
 
+        {/* Special Artist Pose Debug Section */}
+        <div className="telemetry-row stance-debug">
+          <span className="telemetry-label">🕺 Special Pose Debug:</span>
+          <span className="telemetry-value">
+            ΔY: <code>{poseDebug.diffY > 0 ? `+${poseDebug.diffY}` : poseDebug.diffY}</code> | Width: <code>{poseDebug.stanceWidth}</code> | Pose: <strong>{poseDebug.activeSpecialPose}</strong> ({poseDebug.poseStabilityCount}/{GESTURE_CONFIG.SPECIAL_POSE_STABILITY_FRAMES}) {poseDebug.specialPoseCooldownActive ? `[CD: ${poseDebug.specialPoseCooldownRemainingMs}ms]` : ''}
+          </span>
+        </div>
+
         {/* Detailed Vector Metrics */}
         <div className="debug-metrics-grid">
           <div className="metric-box">
@@ -127,8 +148,8 @@ export default function ControlPanel({ telemetry }) {
         {/* Config Hints */}
         <div className="config-hints">
           <small>
-            <strong>Tune Thresholds in `gestureTypes.js`:</strong><br />
-            X: <code>{GESTURE_CONFIG.MOVEMENT_THRESHOLD_X}</code> | Y: <code>{GESTURE_CONFIG.MOVEMENT_THRESHOLD_Y}</code> | Repeat Interval: <code>{GESTURE_CONFIG.DIRECTION_REPEAT_INTERVAL_MS}ms</code> | Cooldown: <code>{GESTURE_CONFIG.GESTURE_COOLDOWN_MS}ms</code>
+            <strong>Pose Thresholds (`gestureTypes.js`):</strong><br />
+            MJ ΔY: <code>{GESTURE_CONFIG.POSE_MJ_DIFF_Y_THRESHOLD}</code> | Rick ΔY: <code>{GESTURE_CONFIG.POSE_RICK_DIFF_Y_THRESHOLD}</code> | Bieber Width: <code>{GESTURE_CONFIG.POSE_BIEBER_STANCE_WIDTH_THRESHOLD}</code> | Hold: <code>{GESTURE_CONFIG.SPECIAL_POSE_STABILITY_FRAMES} frames</code>
           </small>
         </div>
       </div>
@@ -201,6 +222,27 @@ export default function ControlPanel({ telemetry }) {
               title="Manual Trigger: NEXT"
             >
               ⏭ Next
+            </button>
+            <button
+              className="test-btn"
+              onClick={() => handleManualAction(GESTURES.POSE_MJ)}
+              title="Manual Trigger: Michael Jackson"
+            >
+              🕺 MJ
+            </button>
+            <button
+              className="test-btn"
+              onClick={() => handleManualAction(GESTURES.POSE_RICK)}
+              title="Manual Trigger: Rick Astley"
+            >
+              🎤 Rick
+            </button>
+            <button
+              className="test-btn"
+              onClick={() => handleManualAction(GESTURES.POSE_BIEBER)}
+              title="Manual Trigger: Justin Bieber"
+            >
+              🎵 Bieber
             </button>
           </div>
         </div>

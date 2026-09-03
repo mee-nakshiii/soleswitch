@@ -3,7 +3,8 @@ import { GESTURE_CONFIG, GESTURES } from './gestureTypes';
 /**
  * Stateful Gesture Engine for SoleSwitch.
  * Converts MediaPipe foot landmark coordinates into semantic gesture events.
- * Supports hold-to-repeat for NEXT and PREVIOUS gestures while keeping PLAY and PAUSE single-fire.
+ * Evaluates core directional gestures (NEXT, PREVIOUS, PLAY, PAUSE) with hold-to-repeat,
+ * and Special Artist Poses (MJ, Rick Astley, Justin Bieber) independently.
  */
 export class GestureEngine {
   constructor(config = GESTURE_CONFIG) {
@@ -11,10 +12,18 @@ export class GestureEngine {
     this.history = [];
     this.lastFiredTime = 0;
     this.lastFiredEvent = null;
+
+    // Directional Gesture State
     this.candidateGesture = GESTURES.NONE;
     this.candidateCount = 0;
     this.activeRepeatGesture = null;
     this.lastRepeatFiredTime = 0;
+
+    // Special Artist Pose State
+    this.candidateSpecialPose = GESTURES.NONE;
+    this.specialPoseCount = 0;
+    this.lastSpecialPoseFiredTime = 0;
+
     this.listeners = [];
   }
 
@@ -23,6 +32,19 @@ export class GestureEngine {
    */
   onGesture(callback) {
     this.listeners.push(callback);
+  }
+
+  /**
+   * Safely dispatch event to registered listeners
+   */
+  notifyListeners(event) {
+    this.listeners.forEach((fn) => {
+      try {
+        fn(event);
+      } catch (err) {
+        console.error('Error in gesture listener callback:', err);
+      }
+    });
   }
 
   /**
@@ -35,12 +57,17 @@ export class GestureEngine {
     const isCooldownActive = now - this.lastFiredTime < this.config.GESTURE_COOLDOWN_MS;
     const cooldownRemainingMs = Math.max(0, this.config.GESTURE_COOLDOWN_MS - (now - this.lastFiredTime));
 
+    const isSpecialPoseCooldownActive = now - this.lastSpecialPoseFiredTime < this.config.SPECIAL_POSE_COOLDOWN_MS;
+    const specialPoseCooldownRemainingMs = Math.max(0, this.config.SPECIAL_POSE_COOLDOWN_MS - (now - this.lastSpecialPoseFiredTime));
+
     if (!landmarks || landmarks.length === 0 || !landmarks[0]) {
       this.history = [];
       this.candidateGesture = GESTURES.NONE;
       this.candidateCount = 0;
       this.activeRepeatGesture = null;
       this.lastRepeatFiredTime = 0;
+      this.candidateSpecialPose = GESTURES.NONE;
+      this.specialPoseCount = 0;
 
       return {
         currentGesture: GESTURES.NONE,
@@ -52,6 +79,16 @@ export class GestureEngine {
         repeatGesture: null,
         timeUntilNextRepeatMs: 0,
         telemetry: { dx: 0, dy: 0, magnitude: 0 },
+        poseDebug: {
+          leftFootY: 0,
+          rightFootY: 0,
+          diffY: 0,
+          stanceWidth: 0,
+          activeSpecialPose: GESTURES.NONE,
+          poseStabilityCount: 0,
+          specialPoseCooldownActive: isSpecialPoseCooldownActive,
+          specialPoseCooldownRemainingMs,
+        },
       };
     }
 
@@ -65,10 +102,64 @@ export class GestureEngine {
     const leftToe = pose[31];
     const rightToe = pose[32];
 
-    // Calculate center of feet
-    const validPoints = [leftAnkle, rightAnkle, leftHeel, rightHeel, leftToe, rightToe].filter(
-      (p) => p && (p.visibility === undefined || p.visibility > 0.3)
-    );
+    const leftFootPts = [leftAnkle, leftHeel, leftToe].filter((p) => p && (p.visibility === undefined || p.visibility > 0.3));
+    const rightFootPts = [rightAnkle, rightHeel, rightToe].filter((p) => p && (p.visibility === undefined || p.visibility > 0.3));
+
+    const leftFootY = leftFootPts.length > 0 ? leftFootPts.reduce((s, p) => s + p.y, 0) / leftFootPts.length : 0;
+    const rightFootY = rightFootPts.length > 0 ? rightFootPts.reduce((s, p) => s + p.y, 0) / rightFootPts.length : 0;
+
+    const leftFootX = leftFootPts.length > 0 ? leftFootPts.reduce((s, p) => s + p.x, 0) / leftFootPts.length : 0;
+    const rightFootX = rightFootPts.length > 0 ? rightFootPts.reduce((s, p) => s + p.x, 0) / rightFootPts.length : 0;
+
+    const diffY = leftFootPts.length > 0 && rightFootPts.length > 0 ? Number((leftFootY - rightFootY).toFixed(3)) : 0;
+    const stanceWidth = leftFootPts.length > 0 && rightFootPts.length > 0 ? Number(Math.abs(leftFootX - rightFootX).toFixed(3)) : 0;
+
+    // ----------------------------------------------------
+    // 1. Independent Special Artist Pose Evaluation
+    // ----------------------------------------------------
+    let rawSpecialPose = GESTURES.NONE;
+    if (leftFootPts.length > 0 && rightFootPts.length > 0) {
+      if (stanceWidth >= this.config.POSE_BIEBER_STANCE_WIDTH_THRESHOLD) {
+        rawSpecialPose = GESTURES.POSE_BIEBER; // Wide Stance -> Justin Bieber ("Baby")
+      } else if (diffY >= this.config.POSE_MJ_DIFF_Y_THRESHOLD) {
+        rawSpecialPose = GESTURES.POSE_MJ;     // Left leg forward -> Michael Jackson
+      } else if (diffY <= this.config.POSE_RICK_DIFF_Y_THRESHOLD) {
+        rawSpecialPose = GESTURES.POSE_RICK;   // Right leg forward -> Rick Astley
+      }
+    }
+
+    // Special Pose Stability Check (~15 consecutive frames hold required)
+    if (rawSpecialPose !== GESTURES.NONE && rawSpecialPose === this.candidateSpecialPose) {
+      this.specialPoseCount += 1;
+    } else {
+      this.candidateSpecialPose = rawSpecialPose;
+      this.specialPoseCount = 1;
+    }
+
+    if (
+      rawSpecialPose !== GESTURES.NONE &&
+      this.specialPoseCount >= this.config.SPECIAL_POSE_STABILITY_FRAMES &&
+      !isSpecialPoseCooldownActive
+    ) {
+      const poseEvent = {
+        type: rawSpecialPose,
+        confidence: 0.95,
+        timestamp: now,
+        details: { diffY, stanceWidth },
+      };
+
+      this.lastSpecialPoseFiredTime = now;
+      this.lastFiredEvent = poseEvent;
+      this.specialPoseCount = 0;
+
+      // Notify listeners inside try-catch block
+      this.notifyListeners(poseEvent);
+    }
+
+    // ----------------------------------------------------
+    // 2. Core Directional Motion Detection (NEXT, PREVIOUS, PLAY, PAUSE)
+    // ----------------------------------------------------
+    const validPoints = [...leftFootPts, ...rightFootPts];
 
     if (validPoints.length === 0) {
       this.activeRepeatGesture = null;
@@ -84,6 +175,16 @@ export class GestureEngine {
         repeatGesture: null,
         timeUntilNextRepeatMs: 0,
         telemetry: { dx: 0, dy: 0, magnitude: 0 },
+        poseDebug: {
+          leftFootY: Number(leftFootY.toFixed(3)),
+          rightFootY: Number(rightFootY.toFixed(3)),
+          diffY,
+          stanceWidth,
+          activeSpecialPose: this.candidateSpecialPose,
+          poseStabilityCount: this.specialPoseCount,
+          specialPoseCooldownActive: isSpecialPoseCooldownActive,
+          specialPoseCooldownRemainingMs,
+        },
       };
     }
 
@@ -108,6 +209,16 @@ export class GestureEngine {
         repeatGesture: null,
         timeUntilNextRepeatMs: 0,
         telemetry: { dx: 0, dy: 0, magnitude: 0 },
+        poseDebug: {
+          leftFootY: Number(leftFootY.toFixed(3)),
+          rightFootY: Number(rightFootY.toFixed(3)),
+          diffY,
+          stanceWidth,
+          activeSpecialPose: this.candidateSpecialPose,
+          poseStabilityCount: this.specialPoseCount,
+          specialPoseCooldownActive: isSpecialPoseCooldownActive,
+          specialPoseCooldownRemainingMs,
+        },
       };
     }
 
@@ -163,7 +274,7 @@ export class GestureEngine {
     const isStable = this.candidateCount >= this.config.STABILITY_FRAMES;
     const isConfident = confidence >= this.config.MIN_CONFIDENCE;
 
-    // 1. Initial Trigger
+    // 1. Initial Trigger for NEXT, PREVIOUS, PLAY, PAUSE
     if (
       detectedCandidate !== GESTURES.NONE &&
       isStable &&
@@ -192,7 +303,7 @@ export class GestureEngine {
       }
 
       // Notify listeners
-      this.listeners.forEach((fn) => fn(gestureEvent));
+      this.notifyListeners(gestureEvent);
     }
     // 2. Hold-to-Repeat Trigger for NEXT and PREVIOUS
     else if (
@@ -212,7 +323,7 @@ export class GestureEngine {
       this.lastFiredEvent = gestureEvent;
 
       // Notify listeners
-      this.listeners.forEach((fn) => fn(gestureEvent));
+      this.notifyListeners(gestureEvent);
     }
 
     const isRepeatActive = !!this.activeRepeatGesture;
@@ -233,6 +344,16 @@ export class GestureEngine {
         dx: Number(dx.toFixed(3)),
         dy: Number(dy.toFixed(3)),
         magnitude: Number(magnitude.toFixed(3)),
+      },
+      poseDebug: {
+        leftFootY: Number(leftFootY.toFixed(3)),
+        rightFootY: Number(rightFootY.toFixed(3)),
+        diffY,
+        stanceWidth,
+        activeSpecialPose: this.candidateSpecialPose,
+        poseStabilityCount: this.specialPoseCount,
+        specialPoseCooldownActive: isSpecialPoseCooldownActive,
+        specialPoseCooldownRemainingMs,
       },
     };
   }
