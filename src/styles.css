@@ -7,6 +7,7 @@
   --accent-cyan: #06b6d4;
   --accent-purple: #a855f7;
   --accent-green: #22c55e;
+  --accent-red: #ef4444;
   --radius: 16px;
 }
 
@@ -38,7 +39,7 @@ body {
 
 .header {
   text-align: center;
-  margin-bottom: 2.5rem;
+  margin-bottom: 2rem;
 }
 
 .header h1 {
@@ -89,7 +90,7 @@ body {
   gap: 1.5rem;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 900px) {
   .main-grid {
     grid-template-columns: 1fr;
   }
@@ -102,6 +103,8 @@ body {
   border-radius: var(--radius);
   padding: 1.5rem;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
 }
 
 .card-title {
@@ -111,25 +114,141 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
-.camera-placeholder {
+.status-pills {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.status-pill {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 9999px;
+  font-weight: 500;
+}
+
+.status-pill.online {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--accent-green);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.status-pill.pending {
+  background: rgba(6, 182, 212, 0.15);
+  color: var(--accent-cyan);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+}
+
+.status-pill.offline {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--accent-red);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.video-viewport {
+  position: relative;
+  width: 100%;
   aspect-ratio: 4 / 3;
-  background: rgba(15, 23, 42, 0.8);
-  border: 2px dashed var(--border-color);
+  background: #090d16;
   border-radius: calc(var(--radius) - 4px);
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.video-element {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.overlay-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.overlay-message {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.85);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: var(--text-muted);
   gap: 1rem;
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.overlay-message.error {
+  color: var(--accent-red);
+}
+
+.overlay-banner {
+  position: absolute;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid var(--accent-cyan);
+  color: var(--accent-cyan);
+  padding: 0.5rem 1.25rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  backdrop-filter: blur(8px);
+  animation: bounce 2s infinite;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translate(-50%, 0); }
+  50% { transform: translate(-50%, -6px); }
+}
+
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--accent-cyan);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.retry-btn {
+  background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+  color: #ffffff;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.retry-btn:hover {
+  opacity: 0.9;
 }
 
 .gesture-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 1rem;
+  margin-bottom: 1rem;
 }
 
 .gesture-item {
@@ -138,6 +257,14 @@ body {
   border-radius: 12px;
   padding: 1rem;
   text-align: center;
+  transition: all 0.2s ease;
+}
+
+.gesture-item.active-gesture {
+  background: rgba(6, 182, 212, 0.15);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.3);
+  transform: translateY(-2px);
 }
 
 .gesture-item .key {
@@ -154,12 +281,91 @@ body {
   color: var(--accent-cyan);
 }
 
-.spotify-status {
-  margin-top: 1rem;
-  background: rgba(255, 255, 255, 0.02);
+.gesture-item.active-gesture .action {
+  color: #ffffff;
+}
+
+/* Debug Telemetry Panel */
+.debug-telemetry-panel {
+  background: rgba(15, 23, 42, 0.6);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  padding: 1rem;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
   font-size: 0.9rem;
+}
+
+.telemetry-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.telemetry-label {
   color: var(--text-muted);
+  margin-right: 0.5rem;
+}
+
+.telemetry-value {
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.telemetry-value.active-badge {
+  color: var(--accent-cyan);
+  background: rgba(6, 182, 212, 0.1);
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+}
+
+.telemetry-value.highlight {
+  color: var(--accent-purple);
+}
+
+.debug-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.metric-box {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 0.5rem;
+  text-align: center;
+}
+
+.metric-title {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.metric-val {
+  font-family: monospace;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--accent-cyan);
+}
+
+.config-hints {
+  border-top: 1px dashed var(--border-color);
+  padding-top: 0.75rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.config-hints code {
+  color: var(--accent-purple);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
 }
