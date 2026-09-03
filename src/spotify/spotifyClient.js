@@ -1,10 +1,8 @@
-/**
- * Spotify Web API client stub.
- * Handles PKCE Authorization Code flow and sends playback control requests
- * (play, pause, next, previous).
- */
+import { spotifyApi } from './spotifyApi';
+import { spotifyController } from './spotifyController';
+
+export { spotifyApi, spotifyController };
 
 export async function initSpotifyAuth() {
-  // Placeholder stub for Spotify PKCE authentication
-  console.log('Spotify Auth module initialized (stub)');
+  return spotifyApi.handleAuthCallback();
 }

@@ -106,16 +106,17 @@ export class GestureEngine {
     let detectedCandidate = GESTURES.NONE;
 
     if (absDx > absDy) {
+      // Invert horizontal interpretation to account for mirrored front-facing camera feed
       if (dx < -this.config.MOVEMENT_THRESHOLD_X) {
-        detectedCandidate = GESTURES.PREVIOUS; // Stepping / shifting left
+        detectedCandidate = GESTURES.NEXT; // Physical RIGHT movement (dx decreases in mirrored view) -> NEXT
       } else if (dx > this.config.MOVEMENT_THRESHOLD_X) {
-        detectedCandidate = GESTURES.NEXT; // Stepping / shifting right
+        detectedCandidate = GESTURES.PREVIOUS; // Physical LEFT movement (dx increases in mirrored view) -> PREVIOUS
       }
     } else {
       if (dy > this.config.MOVEMENT_THRESHOLD_Y) {
-        detectedCandidate = GESTURES.PLAY; // Moving forward towards camera (y increases)
+        detectedCandidate = GESTURES.PLAY; // Moving forward towards camera (y increases) -> PLAY
       } else if (dy < -this.config.MOVEMENT_THRESHOLD_Y) {
-        detectedCandidate = GESTURES.PAUSE; // Moving backward away from camera (y decreases)
+        detectedCandidate = GESTURES.PAUSE; // Moving backward away from camera (y decreases) -> PAUSE
       }
     }
 
