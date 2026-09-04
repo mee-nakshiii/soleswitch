@@ -79,7 +79,8 @@ For Software:
 
 # Screenshots 
 
-![<img width="1600" height="783" alt="Play" src="https://github.com/user-attachments/assets/092a2689-6f52-4be5-a640-4abf8f8b6c01" />]
+![<img width="1600" height="780" alt="Home_page" src="https://github.com/user-attachments/assets/bf4469e1-bc87-49d1-ab72-c527951c804d" />
+]
 *The SoleSwitch home interface showing the live camera feed, camera readiness, Spotify connection status, and foot-based music control options.*
 
 ![<img width="1600" height="778" alt="Pose" src="https://github.com/user-attachments/assets/12ca3dcd-c4d3-4784-9a90-d29650728ca2" />]
