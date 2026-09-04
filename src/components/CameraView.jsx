@@ -6,7 +6,7 @@ import {
 } from '../vision/poseDetector';
 import { gestureEngine } from '../gestures/gestureEngine';
 
-export default function CameraView({ onTelemetryUpdate }) {
+export default function CameraView({ onTelemetryUpdate, telemetry }) {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const animFrameIdRef = useRef(null);
@@ -18,6 +18,52 @@ export default function CameraView({ onTelemetryUpdate }) {
   const [poseStatus, setPoseStatus] = useState('Initializing MediaPipe Pose...');
   const [poseReady, setPoseReady] = useState(false);
   const [poseDetected, setPoseDetected] = useState(false);
+
+  const [activeHud, setActiveHud] = useState(null);
+  const lastEventTimestampRef = useRef(null);
+
+  // Monitor fired gesture events for overlay feedback
+  useEffect(() => {
+    const lastEvent = telemetry?.lastEvent;
+    if (lastEvent && lastEvent.timestamp !== lastEventTimestampRef.current) {
+      lastEventTimestampRef.current = lastEvent.timestamp;
+      let hudData = null;
+
+      switch (lastEvent.type) {
+        case 'NEXT':
+          hudData = { title: 'NEXT TRACK', symbol: '→→' };
+          break;
+        case 'PREVIOUS':
+          hudData = { title: 'PREVIOUS TRACK', symbol: '←←' };
+          break;
+        case 'PLAY':
+          hudData = { title: 'PLAY', symbol: '▶' };
+          break;
+        case 'PAUSE':
+          hudData = { title: 'PAUSE', symbol: 'Ⅱ' };
+          break;
+        case 'POSE_MJ':
+          hudData = { title: 'BILLIE JEAN', symbol: 'POSE DETECTED' };
+          break;
+        case 'POSE_RICK':
+          hudData = { title: 'NEVER GONNA GIVE YOU UP', symbol: 'POSE DETECTED' };
+          break;
+        case 'POSE_BIEBER':
+          hudData = { title: 'BABY', symbol: 'POSE DETECTED' };
+          break;
+        default:
+          break;
+      }
+
+      if (hudData) {
+        setActiveHud(hudData);
+        const timer = setTimeout(() => {
+          setActiveHud(null);
+        }, 1800);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [telemetry?.lastEvent]);
 
   // Initialize MediaPipe Pose Landmarker
   useEffect(() => {
@@ -107,7 +153,7 @@ export default function CameraView({ onTelemetryUpdate }) {
         lastVideoTime = video.currentTime;
         const result = detectPose(video, performance.now());
 
-        // Feed landmarks into Gesture Engine
+        // Feed landmarks into Foot Gesture Engine (UNTOUCHED)
         const telemetry = gestureEngine.processLandmarks(result ? result.landmarks : null);
         if (onTelemetryUpdate) {
           onTelemetryUpdate(telemetry);
@@ -182,14 +228,17 @@ export default function CameraView({ onTelemetryUpdate }) {
 
   return (
     <div className="card camera-card">
-      <div className="card-title">
-        <span>Camera & Pose Feed</span>
+      <div className="card-header-bar">
+        <div className="card-title-group">
+          <span className="card-title">LIVE CAMERA</span>
+          <span className="live-dot-pill">● LIVE</span>
+        </div>
         <div className="status-pills">
           <span className={`status-pill ${cameraConnected ? 'online' : 'offline'}`}>
-            Camera: {cameraStatus}
+            ● {cameraConnected ? 'Camera Ready' : cameraStatus}
           </span>
           <span className={`status-pill ${poseReady ? 'online' : 'pending'}`}>
-            Pose: {poseStatus}
+            ● {poseReady ? 'Pose Tracking' : poseStatus}
           </span>
         </div>
       </div>
@@ -203,6 +252,14 @@ export default function CameraView({ onTelemetryUpdate }) {
           autoPlay
         />
         <canvas ref={canvasRef} className="overlay-canvas" />
+
+        {/* Temporary Gesture Detected HUD Overlay */}
+        {activeHud && (
+          <div className="gesture-hud-overlay animate-hud">
+            <div className="hud-symbol">{activeHud.symbol}</div>
+            <div className="hud-title">{activeHud.title}</div>
+          </div>
+        )}
 
         {!cameraConnected && !cameraError && (
           <div className="overlay-message">
@@ -223,12 +280,13 @@ export default function CameraView({ onTelemetryUpdate }) {
           </div>
         )}
 
-        {cameraConnected && poseReady && !poseDetected && (
+        {cameraConnected && poseReady && !poseDetected && !activeHud && (
           <div className="overlay-banner">
-            <span>👣 Step into the camera view</span>
+            <span>👣 Step into camera frame to trigger foot gestures</span>
           </div>
         )}
       </div>
     </div>
   );
 }
+

@@ -130,7 +130,7 @@ export class SpotifyController {
       this.statusMessage = `🕺 Special Pose: ${chosenTrack.artist}! Queueing: ${chosenTrack.name}...`;
       this.notifyListeners();
 
-      // Queue-and-Skip strategy preserves user playback context for subsequent NEXT/PREVIOUS operations
+      // Queue-and-Skip Strategy preserves user playback context for subsequent NEXT/PREVIOUS operations
       const playRes = await this.api.enqueueAndPlayTrack(chosenTrack.uri);
 
       if (playRes && playRes.success) {
