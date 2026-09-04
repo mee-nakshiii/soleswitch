@@ -20,7 +20,7 @@ simple foot and leg movements captured through a camera.
 Instead of reaching for your phone or keyboard, just move your feet to play,
 pause, skip, go back and to play specific songs — because apparently our
 feet needed another job.
-https://soleswitch.vercel.app/]
+https://soleswitch.vercel.app/ ]
 
 ### The Problem 
 [Sometimes your hands are busy, your phone is too far away, and reaching for
